@@ -63,6 +63,7 @@ typedef struct {
     uint32_t buf[DCC_BUF_LEN];  /*!< Circular buffer storing signal edge crossing times. */
     uint8_t w_idx;              /*!< Next index to be written in buffer. */
     uint8_t r_idx;              /*!< Index to read from buffer. Only valid when TODO */
+    uint8_t count;              /*!< Number of packet timestamps in buffer */
 } dcc_decoder_t;
 
 /**

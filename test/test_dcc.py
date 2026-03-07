@@ -59,6 +59,7 @@ class dcc_receiver_t(ctypes.Structure):
         ("buffer", ctypes.c_uint32 * DCC_BUF_LEN),
         ("w_idx", ctypes.c_uint8),
         ("r_idx", ctypes.c_uint8),
+        ("count", ctypes.c_uint8),
     ]
 
 # =============================================================================
@@ -446,9 +447,53 @@ class TestPreamble(MySuper):
                 self.lib.init_decoder(devptr)
 
 
+class TestDecodePacket(MySuper):
+    def freshdev(self):
+        "Now also pushes preamble onto device"
+        dev, devptr = super().freshdev()
+        for _ in range(10):
+            self.pushbit(dev, 1)
+        self.pushbit(dev, 0)
+        self.lib.validate_preamble(devptr)
+        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+        return dev, devptr
+
+    def test_packet_detection(self):
+        dev, _ = self.freshdev()
+
+        # exactly the number of bits, 9 for each of the 3 segments
+        for _ in range(3):
+            for _ in range(9):
+                self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+                self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
+        # one bit too few per segment
+        dev, _ = self.freshdev()
+        for _ in range(3):
+            for _ in range(8):
+                self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+                self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+
+        # exactly one bit too few
+        dev, _ = self.freshdev()
+        for _ in range(9 * 3 - 1):
+            self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+            self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+
+        # one bit too many
+        dev, _ = self.freshdev()
+        for _ in range(9 * 3 + 1):
+            self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
-    parser = ArgumentParser("DCC library testing suite.")
+    parser = ArgumentParser(
+        "DCC library testing suite. Accepts array of timestamps to stair plot")
     parser.add_argument(
         "arr", nargs="*", help="will plot an array of timestamps")
     args = parser.parse_args()

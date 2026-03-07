@@ -126,13 +126,28 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
     device->buf[device->w_idx++] = timestamp;
     device->w_idx %= DCC_BUF_LEN;
 
-    /* check for packet start bit, if applicable */
+    /**
+     * If awaiting packet start bit, check last 3 edge timestamps for a 0 bit.
+     * The bit would end at w_idx-1, so start at w_idx-3, since w_idx was
+     * incremented at the start of this function.
+     */
     if (device->state == AWAITING_START_BIT) {
         uint8_t i = (device->w_idx + (-3 + DCC_BUF_LEN)) % DCC_BUF_LEN;
         if (parse_bit(device, i) == 0) {
             device->state = VALIDATING_PREAMBLE;
             device->r_idx = i;
         }
+    /**
+     * Every timestamp following a start bit could be part of the packet.
+     * Count them here so that we know when to decode the packet.
+     * TODO: put counter check somewhere else in logic chain
+     */
+    } else if (device->state == AWAITING_DATA_BYTES) {
+        if (++device->count > 27 * 2 - 1) {
+            device->state = DECODING_PACKET;
+        }
+    } else {
+        device->count++;
     }
 
     return device->state;
