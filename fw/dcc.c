@@ -158,9 +158,10 @@ validate_preamble(dcc_decoder_t * device) {
         device->state = ERROR;
         return device->state;
     }
+    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
     device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
     for (int8_t i = -2; i > -21; i -= 2) {
-        if (1 != parse_bit(device, increment_index(device->r_idx, i))) {
+        if (1 != parse_bit(device, increment_index(base_idx, i))) {
             device->state = AWAITING_START_BIT; /* invalid preamble */
             break;
         }
