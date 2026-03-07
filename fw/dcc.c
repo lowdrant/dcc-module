@@ -98,8 +98,8 @@ int8_t                          /* to prevent indent from weirdly spaceing expli
 parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
     start_idx %= DCC_BUF_LEN;
     uint32_t t1 = device->buf[start_idx];
-    uint32_t t2 = device->buf[increment_index(start_idx, 1)];
-    uint32_t t3 = device->buf[increment_index(start_idx, 2)];
+    uint32_t t2 = device->buf[(start_idx + 1) % DCC_BUF_LEN];
+    uint32_t t3 = device->buf[(start_idx + 2) % DCC_BUF_LEN];
 
     if (t1 >= t2 || t2 >= t3) {
         return -2;
@@ -128,7 +128,7 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
 
     /* check for packet start bit, if applicable */
     if (device->state == AWAITING_START_BIT) {
-        uint8_t i = increment_index(device->w_idx, -3);
+        uint8_t i = (device->w_idx + (-3 + DCC_BUF_LEN)) % DCC_BUF_LEN;
         if (parse_bit(device, i) == 0) {
             device->state = VALIDATING_PREAMBLE;
             device->r_idx = i;
@@ -160,8 +160,8 @@ validate_preamble(dcc_decoder_t * device) {
     }
     uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
     device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
-    for (int8_t i = -2; i > -21; i -= 2) {
-        if (1 != parse_bit(device, increment_index(base_idx, i))) {
+    for (int8_t i = (-2 + DCC_BUF_LEN); i > (-21 + DCC_BUF_LEN); i -= 2) {
+        if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
             device->state = AWAITING_START_BIT; /* invalid preamble */
             break;
         }
