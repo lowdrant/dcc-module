@@ -9,7 +9,7 @@
  * @date 2026-03-07
  * 
  * @copyright Copyright (c) 2026
- * 
+ * @todo null pointer checks
  */
 #include "dcc.h"
 #include <stdlib.h>
@@ -117,6 +117,21 @@ parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
     return -1;
 }
 
+#ifndef PYTHON_TESTING
+static inline int8_t
+#else
+int8_t
+#endif
+parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
+    uint8_t ctr = 8;
+    for (uint8_t i = 0; i < 16; i += 2) {
+        *dst |= parse_bit(device, (base_idx + i) % DCC_BUF_LEN) << (ctr);
+        ctr--;
+    }
+
+    return 0;
+}
+
 /******************************************************************************
  * public
  ******************************************************************************/
@@ -143,7 +158,7 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
      * TODO: put counter check somewhere else in logic chain
      */
     } else if (device->state == AWAITING_DATA_BYTES) {
-        if (++device->count > 27 * 2 - 1) {
+        if (++device->count > DCC_EDGES_PER_PKT) {
             device->state = DECODING_PACKET;
         }
     } else {
@@ -181,5 +196,37 @@ validate_preamble(dcc_decoder_t * device) {
             break;
         }
     }
+    return device->state;
+}
+
+dcc_state_t
+decode_packet(dcc_decoder_t * device) {
+    // device->state = ERROR; /* pre-emptive set because many error cases */
+    // if (device->state != DECODING_PACKET) {
+    //     return device->state;
+    // }
+
+    uint8_t *dsts[3] = {
+        &(device->packet.address),
+        &(device->packet.instruction),
+        &(device->packet.error_detection)
+    };
+    uint8_t base_idx = (device->r_idx - 2 + DCC_BUF_LEN) % DCC_BUF_LEN;
+    for (uint8_t i = 0; i < 3; i++) {
+        parse_byte(device, dsts[i], base_idx);// != 0//) {
+        //     return device->state;
+        // }
+        base_idx += 16;
+        base_idx %= DCC_BUF_LEN;
+        // if ( (i < 2) && (parse_bit(device, base_idx) != 0)) {
+        //     return device->state;
+        // } //else if (parse_bit(device, base_idx) != 1) {
+        //     return device->state;
+        // }
+        base_idx += 2;
+        base_idx %= DCC_BUF_LEN;
+    }
+
+    device->state = PACKET_RECEIVED;
     return device->state;
 }

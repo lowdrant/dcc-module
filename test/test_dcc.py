@@ -67,10 +67,9 @@ class dcc_receiver_t(ctypes.Structure):
 # =============================================================================
 
 
-def plot_buffer(dcc_receiver_t):
+def plot_buffer(device):
     "Plot dcc rx buffer contents. returns fig"
-    f, ax = plt.subplots()
-    edges = sorted(v for v in dcc_receiver_t.buffer)
+    edges = sorted(v for v in device.buffer)
     return plot_edges(edges)
 
 
@@ -193,7 +192,12 @@ class MySuper(TestCase):
             for i in range(-nb, na + 1)
         ]
         msg = str(msg) + f" idx={idx}"
-        return self.assertEqual(device.state, state, msg=msg)
+        try:
+            out = self.assertEqual(device.state, state, msg=msg)
+        except AssertionError as e:
+            plot_buffer(device)
+            plt.show()
+            raise e
 
 
 class TestParseBit(MySuper):
@@ -488,6 +492,34 @@ class TestDecodePacket(MySuper):
         for _ in range(9 * 3 + 1):
             self.pushbit(dev, 1)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
+    def test_packet_decoding(self):
+        dev, _ = self.freshdev()
+        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+        addr = 0xFF
+        instr = 0xFF
+        errdet = addr ^ instr
+
+        # push packet
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (addr >> i) & 1)
+        self.pushbit(dev, 0)
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (instr >> i) & 1)
+        self.pushbit(dev, 0)
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (errdet >> i) & 1)
+        self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
+        # self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb = 40, na=0)
+
+        # self.assertState(dev, dcc_state_t.DECODING_PACKET)
+        self.lib.decode_packet(ctypes.pointer(dev))
+        self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb = 40, na=0)
+
+        self.assertEqual(dev.packet.address, addr)
+
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@
   * - if preamble, wait for data
   * - if data valid, ready, else error
   * invalid preambles just reset preamble detection
+  * @todo make incrementing/checking the state a single function
   */
 #ifndef _DCC_H
 #define _DCC_H
@@ -24,6 +25,7 @@
 #define TR0_MIN ((uint32_t) 90) /*!< Minimum '0' halfbit width in us. */
 #define TR0_MAX ((uint32_t) 10000)      /*!< Maximum '0' halfbit width in us. */
 #define DCC_BUF_LEN ((uint8_t) 64)      /*!< Smallest power of two that holds a packet */
+#define DCC_EDGES_PER_PKT ((uint8_t) 27 * 2 - 1)        /*!< Edges in a packet. */
 
 /**
  * @brief Valid DCC decoder states. 
@@ -105,5 +107,15 @@ dcc_state_t init_decoder(dcc_decoder_t * device);
  * @return dcc_state_t device state after validation.
  */
 dcc_state_t validate_preamble(dcc_decoder_t * device);
+
+/**
+ * @brief Decode bits in device->buffer. If a valid packet, store in
+ *        device->packet. Updates device->state accordingly.
+ * 
+ * @param device dcc_ddevice->r_idx + i * ?? device state after packet parsing. `PACKET_READY` if
+ *         successful, `ERROR` if invalid packet or function called when
+ *         starting state not `DECODING_PACKET`.
+ */
+dcc_state_t decode_packet(dcc_decoder_t * device);
 
 #endif                          /* #ifndef _DCC_H */
