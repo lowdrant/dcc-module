@@ -1,1 +1,1 @@
--linux -brf -i4 -nut -psl -sc 
+-linux -brf -cli4 -i4 -nut -psl -sc 
