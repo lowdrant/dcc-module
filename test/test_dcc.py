@@ -512,9 +512,6 @@ class TestDecodePacket(MySuper):
         self.pushbit(dev, 1)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
-        # self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb = 40, na=0)
-
-        # self.assertState(dev, dcc_state_t.DECODING_PACKET)
         self.lib.decode_packet(ctypes.pointer(dev))
         self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb = 40, na=0)
 

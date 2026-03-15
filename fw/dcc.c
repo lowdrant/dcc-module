@@ -123,12 +123,18 @@ static inline int8_t
 int8_t
 #endif
 parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
-    uint8_t ctr = 8;
+    uint8_t ctr = 7;
+    int8_t bit = 0;
     for (uint8_t i = 0; i < 16; i += 2) {
-        *dst |= parse_bit(device, (base_idx + i) % DCC_BUF_LEN) << (ctr);
-        ctr--;
+        bit = parse_bit(device, (base_idx + i) % DCC_BUF_LEN);
+        if (bit > -1) {
+            *dst |= ((uint8_t) bit) << (ctr);
+            ctr--;
+        } else {
+            device->state = ERROR;
+            return -1;
+        }
     }
-
     return 0;
 }
 
@@ -211,18 +217,20 @@ decode_packet(dcc_decoder_t * device) {
         &(device->packet.instruction),
         &(device->packet.error_detection)
     };
-    uint8_t base_idx = (device->r_idx - 2 + DCC_BUF_LEN) % DCC_BUF_LEN;
+    uint8_t base_idx = (device->r_idx + 2) % DCC_BUF_LEN;
     for (uint8_t i = 0; i < 3; i++) {
-        parse_byte(device, dsts[i], base_idx);// != 0//) {
-        //     return device->state;
-        // }
+        if (parse_byte(device, dsts[i], base_idx) != 0) {
+            return device->state;
+        }
         base_idx += 16;
         base_idx %= DCC_BUF_LEN;
-        // if ( (i < 2) && (parse_bit(device, base_idx) != 0)) {
-        //     return device->state;
-        // } //else if (parse_bit(device, base_idx) != 1) {
-        //     return device->state;
-        // }
+        if (i < 2) {
+            if (parse_bit(device, base_idx) != 0) {
+                return device->state;
+            }
+        } else if (parse_bit(device, base_idx) != 1) {
+            return device->state;
+        }
         base_idx += 2;
         base_idx %= DCC_BUF_LEN;
     }
