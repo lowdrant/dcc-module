@@ -118,4 +118,7 @@ dcc_state_t validate_preamble(dcc_decoder_t * device);
  */
 dcc_state_t decode_packet(dcc_decoder_t * device);
 
+/* TODO */
+dcc_state_t reset_decoder(dcc_decoder_t * device);
+
 #endif                          /* #ifndef _DCC_H */

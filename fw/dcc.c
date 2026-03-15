@@ -176,15 +176,26 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
 
 dcc_state_t
 init_decoder(dcc_decoder_t * device) {
-    device->state = AWAITING_START_BIT;
+    reset_decoder(device);
+
     device->w_idx = 0;
     device->r_idx = 0;
-    device->packet.address = 0;
-    device->packet.instruction = 0;
-    device->packet.error_detection = 0;
+    // device->packet.address = 0;
+    // device->packet.instruction = 0;
+    // device->packet.error_detection = 0;
     for (uint8_t i = 0; i < DCC_BUF_LEN; i++) {
         device->buf[i] = 0;
     }
+    return device->state;
+}
+
+dcc_state_t
+reset_decoder(dcc_decoder_t * device) {
+    device->state = AWAITING_START_BIT;
+    device->count = 0;
+    device->packet.address = 0;
+    // device->packet.instruction = 0;
+    device->packet.error_detection = 0;
     return device->state;
 }
 
@@ -202,6 +213,7 @@ validate_preamble(dcc_decoder_t * device) {
             break;
         }
     }
+    // device->state = AWAITING_DATA_BYTES;
     return device->state;
 }
 
@@ -234,6 +246,7 @@ decode_packet(dcc_decoder_t * device) {
         base_idx += 2;
         base_idx %= DCC_BUF_LEN;
     }
+    /* TODO: validate error detection */
 
     device->state = PACKET_RECEIVED;
     return device->state;

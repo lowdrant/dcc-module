@@ -30,7 +30,7 @@ class dcc_packet_t(ctypes.Structure):
     _fields_ = [
         ("address", ctypes.c_uint8),
         ("instruction", ctypes.c_uint8),
-        ("ERROR_detection", ctypes.c_uint8),
+        ("error_detection", ctypes.c_uint8),
     ]
 
 
@@ -452,15 +452,34 @@ class TestPreamble(MySuper):
 
 
 class TestDecodePacket(MySuper):
+
     def freshdev(self):
         "Now also pushes preamble onto device"
         dev, devptr = super().freshdev()
-        for _ in range(10):
-            self.pushbit(dev, 1)
-        self.pushbit(dev, 0)
+        self.push_preamble(dev)
         self.lib.validate_preamble(devptr)
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
         return dev, devptr
+
+    def push_preamble(self, dev):
+        for _ in range(10):
+            self.pushbit(dev, 1)
+        self.pushbit(dev, 0)
+
+    def push_base_packet(self, dev, addr, instr):
+        errdet = addr ^ instr
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (addr >> i) & 1)
+        self.pushbit(dev, 0)
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (instr >> i) & 1)
+        self.pushbit(dev, 0)
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (errdet >> i) & 1)
+        self.pushbit(dev, 1)
 
     def test_packet_detection(self):
         dev, _ = self.freshdev()
@@ -493,30 +512,63 @@ class TestDecodePacket(MySuper):
             self.pushbit(dev, 1)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
-    def test_packet_decoding(self):
-        dev, _ = self.freshdev()
-        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+    def test_base_packet_decoding(self):
         addr = 0xFF
         instr = 0xFF
-        errdet = addr ^ instr
+        dev, devptr = self.freshdev()
 
-        # push packet
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (addr >> i) & 1)
-        self.pushbit(dev, 0)
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (instr >> i) & 1)
-        self.pushbit(dev, 0)
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (errdet >> i) & 1)
-        self.pushbit(dev, 1)
+        self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+        self.push_base_packet(dev, addr, instr)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
-        self.lib.decode_packet(ctypes.pointer(dev))
-        self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb = 40, na=0)
+        self.lib.decode_packet(devptr)
+        self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=40, na=0)
 
         self.assertEqual(dev.packet.address, addr)
+        self.assertEqual(dev.packet.instruction, instr)
+        self.assertEqual(dev.packet.error_detection, addr ^ instr)
 
+    def test_every_possible_base_packet(self):
+        for addr in range(255):
+            for instr in range(255):
+                dev, devptr = self.freshdev()
+                self.push_base_packet(dev, addr, instr)
+                self.assertState(dev, dcc_state_t.DECODING_PACKET)
+                self.lib.decode_packet(devptr)
+                self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=40, na=0)
+
+                self.assertEqual(dev.packet.address, addr)
+                self.assertEqual(dev.packet.instruction, instr)
+                self.assertEqual(dev.packet.error_detection, addr ^ instr)
+
+    def test_base_packet_monte_carlo(self):
+        "TODO: randomize steps to test interrupt protection"
+        dev, devptr = super().freshdev()
+        self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
+        for _ in range(2):
+            addr = randrange(0, 255)
+            instr = randrange(0, 255)
+            self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
+
+            self.push_preamble(dev)
+            self.assertState(dev, dcc_state_t.VALIDATING_PREAMBLE)
+
+            self.lib.validate_preamble(devptr)
+            self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+
+            self.push_base_packet(dev, addr, instr)
+            self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
+            self.lib.decode_packet(devptr)
+            self.assertState(dev, dcc_state_t.PACKET_RECEIVED)
+
+            self.assertEqual(dev.packet.address, addr)
+            self.assertEqual(dev.packet.instruction, instr)
+            self.assertEqual(dev.packet.error_detection, addr ^ instr)
+
+            self.lib.reset_decoder(devptr)
+            # dev.state = dcc_state_t.AWAITING_START_BIT  # TODO: C function
+            # dev.count = ctypes.c_uint8(0)
 
 
 if __name__ == "__main__":
