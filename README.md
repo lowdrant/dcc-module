@@ -15,6 +15,7 @@ Digital Command Control (DCC) is a communications and power delivery standard fo
   - [ ] select buck converter
   - [ ] select ideal diode controller
 - [ ] test edge detection on common-drain attenuator design
+- [ ] fw for extended packets
 
 
 ## Limitations
