@@ -30,12 +30,12 @@
 #define _DCC_H
 #include <stdint.h>
 
-#define TR1_MIN ((uint32_t) 52) /*!< Minimum '1' halfbit width in us. */
-#define TR1_MAX ((uint32_t) 64) /*!< Maximum '1' halfbit width in us. */
-#define TR1D ((uint32_t) 6)     /*!< Maximum difference in '1' halfbit widths within a single bit in us */
-#define TR0_MIN ((uint32_t) 90) /*!< Minimum '0' halfbit width in us. */
-#define TR0_MAX ((uint32_t) 10000)      /*!< Maximum '0' halfbit width in us. */
-#define DCC_BUF_LEN ((uint8_t) 64)      /*!< Smallest power of two that holds a packet */
+#define TR1_MIN 52              /*!< Minimum '1' halfbit width in us. */
+#define TR1_MAX 64              /*!< Maximum '1' halfbit width in us. */
+#define TR1D 6                  /*!< Maximum difference in '1' halfbit widths within a single bit in us */
+#define TR0_MIN 90              /*!< Minimum '0' halfbit width in us. */
+#define TR0_MAX 10000           /*!< Maximum '0' halfbit width in us. */
+#define DCC_BUF_LEN 64          /*!< Smallest power of two that holds a packet */
 
 /**
  * @brief Valid DCC decoder states. 
@@ -71,9 +71,9 @@ typedef struct {
     dcc_packet_t packet;        /*!< Decoded packet if state == PACKET_RECEIVED. */
     dcc_state_t state;          /*!< Current decoder state. */
     uint32_t buf[DCC_BUF_LEN];  /*!< Circular buffer storing signal edge crossing times. */
-    uint8_t w_idx;              /*!< Next index to be written in buffer. */
-    uint8_t r_idx;              /*!< The ending (third) edge of the packet start bit. */
-    uint8_t count;              /*!< Number of packet timestamps in buffer. */
+    unsigned int w_idx;         /*!< Next index to be written in buffer. */
+    unsigned int r_idx;         /*!< The ending (third) edge of the packet start bit. */
+    unsigned int count;         /*!< Number of packet timestamps in buffer. */
 } dcc_decoder_t;
 
 /**

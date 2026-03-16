@@ -57,9 +57,9 @@ class dcc_receiver_t(ctypes.Structure):
         ("packet", dcc_packet_t),
         ("state", ctypes.c_int),
         ("buffer", ctypes.c_uint32 * DCC_BUF_LEN),
-        ("w_idx", ctypes.c_uint8),
-        ("r_idx", ctypes.c_uint8),
-        ("count", ctypes.c_uint8),
+        ("w_idx", ctypes.c_uint),
+        ("r_idx", ctypes.c_uint),
+        ("count", ctypes.c_uint),
     ]
 
 # =============================================================================
@@ -593,6 +593,7 @@ class TestDecodePacket(MySuper):
             self.lib.clr_decoder(devptr)
             # dev.state = dcc_state_t.AWAITING_START_BIT  # TODO: C function
             # dev.count = ctypes.c_uint8(0)
+
 
 if __name__ == "__main__":
     from argparse import ArgumentParser

@@ -57,9 +57,9 @@ get_DCC_BUF_LEN() {
  ******************************************************************************/
 
 #ifndef PYTHON_TESTING
-static inline int8_t
+static inline int
 #else
-int8_t                          /* to prevent indent from weirdly spacing explicit size types */
+int                             /* to prevent indent from weirdly spacing explicit size types */
 #endif                          /* #ifndef PYTHON_TESTING */
 /**
  * @brief Identify a DCC bit given the index of a starting edge in a buffer.
@@ -73,13 +73,12 @@ int8_t                          /* to prevent indent from weirdly spacing explic
  * 
  * @param device dcc_decoder_t * channel being evaluated
  * @param start_idx first index in the buffer of the three timestamps.
- * @return int8_t 1 if a 1 bit, 0 if a 0 bit, -2 if non-monotonic timestamps,
+ * @return int 1 if a 1 bit, 0 if a 0 bit, -2 if non-monotonic timestamps,
  *                -1 otherwise.
  * @note Must be fast for IRQs (time budget of ~10us). 
  */
-parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
-    start_idx %= DCC_BUF_LEN;
-    uint32_t t1 = device->buf[start_idx];
+parse_bit(dcc_decoder_t * device, unsigned int start_idx) {
+    uint32_t t1 = device->buf[start_idx % DCC_BUF_LEN];
     uint32_t t2 = device->buf[(start_idx + 1) % DCC_BUF_LEN];
     uint32_t t3 = device->buf[(start_idx + 2) % DCC_BUF_LEN];
 
@@ -87,10 +86,10 @@ parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
         return -2;
     }
 
-    uint32_t dt1 = t2 - t1;
-    uint32_t dt2 = t3 - t2;
+    int_fast16_t dt1 = t2 - t1;
+    int_fast16_t dt2 = t3 - t2;
     if (dt1 <= TR1_MAX && dt1 >= TR1_MIN && dt2 <= TR1_MAX
-        && dt2 >= TR1_MIN && abs((int)(dt1 - dt2)) <= TR1D) {
+        && dt2 >= TR1_MIN && abs(dt1 - dt2) <= TR1D) {
         return 1;
     } else if (dt1 <= TR0_MAX
                && dt1 >= TR0_MIN && dt2 <= TR0_MAX && dt2 >= TR0_MIN) {
@@ -99,11 +98,11 @@ parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
     return -1;
 }
 
-static inline int8_t
-parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
-    uint8_t ctr = 7;
-    int8_t bit = 0;
-    for (uint8_t i = 0; i < 16; i += 2) {
+static inline int
+parse_byte(dcc_decoder_t * device, uint8_t * dst, unsigned int base_idx) {
+    int ctr = 7;
+    int bit = 0;
+    for (int i = 0; i < 16; i += 2) {
         bit = parse_bit(device, (base_idx + i) % DCC_BUF_LEN);
         if (bit > -1) {
             *dst |= ((uint8_t) bit) << (ctr);
@@ -123,8 +122,8 @@ decode_packet(dcc_decoder_t * device) {
         &(device->packet.instruction),
         &(device->packet.error_detection)
     };
-    uint8_t base_idx = (device->r_idx + 2) % DCC_BUF_LEN;
-    for (uint8_t i = 0; i < 3; i++) {
+    unsigned int base_idx = (device->r_idx + 2) % DCC_BUF_LEN;
+    for (int i = 0; i < 3; i++) {
         if (parse_byte(device, dsts[i], base_idx) != 0) {
             return device->state;
         }
@@ -163,7 +162,7 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
      * Otherwise, increment the edge timestamp tracker
      */
     if (device->state == AWAITING_START_BIT) {
-        uint8_t i = (device->w_idx + (-3 + DCC_BUF_LEN)) % DCC_BUF_LEN;
+        int i = (device->w_idx + DCC_BUF_LEN - 3) % DCC_BUF_LEN;
         if (parse_bit(device, i) == 0) {
             device->state = VALIDATING_PREAMBLE;
             device->r_idx = i;
@@ -180,7 +179,7 @@ init_decoder(dcc_decoder_t * device) {
     clr_decoder(device);
     device->w_idx = 0;
     device->r_idx = 0;
-    for (uint8_t i = 0; i < DCC_BUF_LEN; i++) {
+    for (int i = 0; i < DCC_BUF_LEN; i++) {
         device->buf[i] = 0;     /* TODO: does this even matter? */
     }
     return device->state;
@@ -204,7 +203,7 @@ step_decoder(dcc_decoder_t * device) {
             break;              /* this state is handled in push_timestamp */
         case VALIDATING_PREAMBLE:
             device->state = AWAITING_DATA_BYTES;
-            for (int8_t i = (DCC_BUF_LEN - 2); i > (DCC_BUF_LEN - 21); i -= 2) {
+            for (int i = (DCC_BUF_LEN - 2); i > (DCC_BUF_LEN - 21); i -= 2) {
                 if (1 != parse_bit(device, (device->r_idx + i) % DCC_BUF_LEN)) {
                     device->state = AWAITING_START_BIT; /* invalid preamble */
                     break;
