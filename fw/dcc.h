@@ -83,7 +83,7 @@ typedef struct {
  * @param timestamp timestamp of edge crossing.
  * @return dcc_state_t 
  */
-dcc_state_t new_timestamp(dcc_decoder_t * device, uint32_t timestamp);
+dcc_state_t push_timestamp(dcc_decoder_t * device, uint32_t timestamp);
 
 /**
  * @brief Initialize decoder. Sets all members to 0.
@@ -93,32 +93,10 @@ dcc_state_t new_timestamp(dcc_decoder_t * device, uint32_t timestamp);
  */
 dcc_state_t init_decoder(dcc_decoder_t * device);
 
-/**
- * @brief Validate recieved preamble. Updates device->state based on validation
- *        result.
- *
- * This function should be called shortly after the device state becomes
- * `VALIDATING_PREAMBLE`. If the preamble is valid, the state becomes
- * `AWAITING_DATA_BYTES` else `AWAITING_START_BIT`. If device state is anything
- * other than `VALIDATING_PREAMBLE` at the start of this function, the device
- * state is set to `ERROR`.
- * 
- * @param device dcc_decoder_t * device that has received start bit.
- * @return dcc_state_t device state after validation.
- */
-dcc_state_t validate_preamble(dcc_decoder_t * device);
-
-/**
- * @brief Decode bits in device->buffer. If a valid packet, store in
- *        device->packet. Updates device->state accordingly.
- * 
- * @param device dcc_ddevice->r_idx + i * ?? device state after packet parsing. `PACKET_READY` if
- *         successful, `ERROR` if invalid packet or function called when
- *         starting state not `DECODING_PACKET`.
- */
-dcc_state_t decode_packet(dcc_decoder_t * device);
-
 /* TODO */
 dcc_state_t reset_decoder(dcc_decoder_t * device);
+
+/* TODO */
+dcc_state_t step_decoder(dcc_decoder_t * device);
 
 #endif                          /* #ifndef _DCC_H */

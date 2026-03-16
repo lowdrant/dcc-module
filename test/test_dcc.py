@@ -482,34 +482,38 @@ class TestDecodePacket(MySuper):
         self.pushbit(dev, 1)
 
     def test_packet_detection(self):
-        dev, _ = self.freshdev()
+        dev, devptr = self.freshdev()
 
         # exactly the number of bits, 9 for each of the 3 segments
         for _ in range(3):
             for _ in range(9):
                 self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
                 self.pushbit(dev, 1)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
         # one bit too few per segment
-        dev, _ = self.freshdev()
+        dev, devptr = self.freshdev()
         for _ in range(3):
             for _ in range(8):
                 self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
                 self.pushbit(dev, 1)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
 
         # exactly one bit too few
-        dev, _ = self.freshdev()
+        dev, devptr = self.freshdev()
         for _ in range(9 * 3 - 1):
             self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
             self.pushbit(dev, 1)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
 
         # one bit too many
-        dev, _ = self.freshdev()
+        dev, devptr = self.freshdev()
         for _ in range(9 * 3 + 1):
             self.pushbit(dev, 1)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
     def test_base_packet_decoding(self):
@@ -519,9 +523,10 @@ class TestDecodePacket(MySuper):
 
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
         self.push_base_packet(dev, addr, instr)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
-        self.lib.decode_packet(devptr)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=40, na=0)
 
         self.assertEqual(dev.packet.address, addr)
@@ -533,8 +538,9 @@ class TestDecodePacket(MySuper):
             for instr in range(255):
                 dev, devptr = self.freshdev()
                 self.push_base_packet(dev, addr, instr)
+                self.lib.step_decoder(devptr)
                 self.assertState(dev, dcc_state_t.DECODING_PACKET)
-                self.lib.decode_packet(devptr)
+                self.lib.step_decoder(devptr)
                 self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=40, na=0)
 
                 self.assertEqual(dev.packet.address, addr)
@@ -553,13 +559,14 @@ class TestDecodePacket(MySuper):
             self.push_preamble(dev)
             self.assertState(dev, dcc_state_t.VALIDATING_PREAMBLE)
 
-            self.lib.validate_preamble(devptr)
+            self.lib.step_decoder(devptr)
             self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
 
             self.push_base_packet(dev, addr, instr)
+            self.lib.step_decoder(devptr)
             self.assertState(dev, dcc_state_t.DECODING_PACKET)
 
-            self.lib.decode_packet(devptr)
+            self.lib.step_decoder(devptr)
             self.assertState(dev, dcc_state_t.PACKET_RECEIVED)
 
             self.assertEqual(dev.packet.address, addr)

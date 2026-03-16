@@ -138,6 +138,57 @@ parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
     return 0;
 }
 
+#ifndef PYTHON_TESTING
+static inline dcc_state_t
+#else
+dcc_state_t
+#endif
+validate_preamble(dcc_decoder_t * device) {
+    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
+    device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
+    for (int8_t i = (-2 + DCC_BUF_LEN); i > (-21 + DCC_BUF_LEN); i -= 2) {
+        if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
+            device->state = AWAITING_START_BIT; /* invalid preamble */
+            break;
+        }
+    }
+    return device->state;
+}
+
+#ifndef PYTHON_TESTING
+static inline dcc_state_t
+#else
+dcc_state_t
+#endif
+decode_packet(dcc_decoder_t * device) {
+    uint8_t *dsts[3] = {
+        &(device->packet.address),
+        &(device->packet.instruction),
+        &(device->packet.error_detection)
+    };
+    uint8_t base_idx = (device->r_idx + 2) % DCC_BUF_LEN;
+    for (uint8_t i = 0; i < 3; i++) {
+        if (parse_byte(device, dsts[i], base_idx) != 0) {
+            return device->state;
+        }
+        base_idx += 16;
+        base_idx %= DCC_BUF_LEN;
+        if (i < 2) {
+            if (parse_bit(device, base_idx) != 0) {
+                return device->state;
+            }
+        } else if (parse_bit(device, base_idx) != 1) {
+            return device->state;
+        }
+        base_idx += 2;
+        base_idx %= DCC_BUF_LEN;
+    }
+    /* TODO: validate error detection */
+
+    device->state = PACKET_RECEIVED;
+    return device->state;
+}
+
 /******************************************************************************
  * public
  ******************************************************************************/
@@ -151,21 +202,14 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
      * If awaiting packet start bit, check last 3 edge timestamps for a 0 bit.
      * The bit would end at w_idx-1, so start at w_idx-3, since w_idx was
      * incremented at the start of this function.
+     *
+     * Otherwise, increment the edge timestamp tracker
      */
     if (device->state == AWAITING_START_BIT) {
         uint8_t i = (device->w_idx + (-3 + DCC_BUF_LEN)) % DCC_BUF_LEN;
         if (parse_bit(device, i) == 0) {
             device->state = VALIDATING_PREAMBLE;
             device->r_idx = i;
-        }
-    /**
-     * Every timestamp following a start bit could be part of the packet.
-     * Count them here so that we know when to decode the packet.
-     * TODO: put counter check somewhere else in logic chain
-     */
-    } else if (device->state == AWAITING_DATA_BYTES) {
-        if (++device->count > DCC_EDGES_PER_PKT) {
-            device->state = DECODING_PACKET;
         }
     } else {
         device->count++;
@@ -194,60 +238,37 @@ reset_decoder(dcc_decoder_t * device) {
     device->state = AWAITING_START_BIT;
     device->count = 0;
     device->packet.address = 0;
-    // device->packet.instruction = 0;
+    // device->packet.instruction = 0; /* TODO: why does this one not need a reset? */
     device->packet.error_detection = 0;
     return device->state;
 }
 
 dcc_state_t
-validate_preamble(dcc_decoder_t * device) {
-    if (device->state != VALIDATING_PREAMBLE) {
-        device->state = ERROR;
-        return device->state;
-    }
-    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
-    device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
-    for (int8_t i = (-2 + DCC_BUF_LEN); i > (-21 + DCC_BUF_LEN); i -= 2) {
-        if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
-            device->state = AWAITING_START_BIT; /* invalid preamble */
+step_decoder(dcc_decoder_t * device) {
+    // uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
+
+    switch (device->state) {
+        case AWAITING_START_BIT:
+            break;              /* this state is handled in push_timestamp */
+        case VALIDATING_PREAMBLE:
+            validate_preamble(device);
+            /* TODO: if error, check for next preamble */
             break;
-        }
-    }
-    // device->state = AWAITING_DATA_BYTES;
-    return device->state;
-}
-
-dcc_state_t
-decode_packet(dcc_decoder_t * device) {
-    // device->state = ERROR; /* pre-emptive set because many error cases */
-    // if (device->state != DECODING_PACKET) {
-    //     return device->state;
-    // }
-
-    uint8_t *dsts[3] = {
-        &(device->packet.address),
-        &(device->packet.instruction),
-        &(device->packet.error_detection)
-    };
-    uint8_t base_idx = (device->r_idx + 2) % DCC_BUF_LEN;
-    for (uint8_t i = 0; i < 3; i++) {
-        if (parse_byte(device, dsts[i], base_idx) != 0) {
-            return device->state;
-        }
-        base_idx += 16;
-        base_idx %= DCC_BUF_LEN;
-        if (i < 2) {
-            if (parse_bit(device, base_idx) != 0) {
-                return device->state;
+        case AWAITING_DATA_BYTES:
+            /* 3 sections, 9 bits per section, 2 edges per bit */
+            if (device->count > 3 * 9 * 2 - 1) {
+                /* TODO: find & validate end bit */
+                /* TODO: if error, check for next preamble */
+                device->state = DECODING_PACKET;
             }
-        } else if (parse_bit(device, base_idx) != 1) {
-            return device->state;
-        }
-        base_idx += 2;
-        base_idx %= DCC_BUF_LEN;
+            break;
+        case DECODING_PACKET:
+            decode_packet(device);
+            /* TODO: if error, check for next premable */
+            break;
+        case PACKET_RECEIVED:
+        case ERROR:
+            break;              /* TODO: what should these states do? */
     }
-    /* TODO: validate error detection */
-
-    device->state = PACKET_RECEIVED;
     return device->state;
 }
