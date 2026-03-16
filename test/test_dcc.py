@@ -9,7 +9,7 @@ import random
 from enum import IntEnum
 from pathlib import Path
 from random import random as rand
-from random import randrange, seed
+from random import randrange, sample, seed
 from unittest import TestCase, main
 
 from matplotlib import pyplot as plt
@@ -198,6 +198,26 @@ class MySuper(TestCase):
             plot_buffer(device)
             plt.show()
             raise e
+
+    def push_preamble(self, dev):
+        for _ in range(10):
+            self.pushbit(dev, 1)
+        self.pushbit(dev, 0)
+
+    def push_base_packet(self, dev, addr, instr):
+        errdet = addr ^ instr
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (addr >> i) & 1)
+        self.pushbit(dev, 0)
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (instr >> i) & 1)
+        self.pushbit(dev, 0)
+
+        for i in range(7, -1, -1):
+            self.pushbit(dev, (errdet >> i) & 1)
+        self.pushbit(dev, 1)
 
 
 class TestParseBit(MySuper):
@@ -461,26 +481,6 @@ class TestDecodePacket(MySuper):
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
         return dev, devptr
 
-    def push_preamble(self, dev):
-        for _ in range(10):
-            self.pushbit(dev, 1)
-        self.pushbit(dev, 0)
-
-    def push_base_packet(self, dev, addr, instr):
-        errdet = addr ^ instr
-
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (addr >> i) & 1)
-        self.pushbit(dev, 0)
-
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (instr >> i) & 1)
-        self.pushbit(dev, 0)
-
-        for i in range(7, -1, -1):
-            self.pushbit(dev, (errdet >> i) & 1)
-        self.pushbit(dev, 1)
-
     def test_packet_detection(self):
         dev, devptr = self.freshdev()
 
@@ -534,24 +534,41 @@ class TestDecodePacket(MySuper):
         self.assertEqual(dev.packet.error_detection, addr ^ instr)
 
     def test_every_possible_base_packet(self):
+        dev, devptr = super().freshdev()
         for addr in range(255):
             for instr in range(255):
-                dev, devptr = self.freshdev()
+                self.push_preamble(dev)
+                self.assertState(dev, dcc_state_t.VALIDATING_PREAMBLE)
+
+                self.lib.step_decoder(devptr)
+                self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+
                 self.push_base_packet(dev, addr, instr)
+                self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
+
                 self.lib.step_decoder(devptr)
                 self.assertState(dev, dcc_state_t.DECODING_PACKET)
+
                 self.lib.step_decoder(devptr)
-                self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=40, na=0)
+                self.assertState(dev, dcc_state_t.PACKET_RECEIVED, nb=60, na=0)
 
                 self.assertEqual(dev.packet.address, addr)
                 self.assertEqual(dev.packet.instruction, instr)
                 self.assertEqual(dev.packet.error_detection, addr ^ instr)
 
+                # prevent decoding through timestamp overflow
+                if any(dev.buffer[i] > (2**32 - 1e6) for i in range(self.DCC_BUF_LEN)):
+                    while all(dev.buffer[i] > 2e5 for i in range(self.DCC_BUF_LEN)):
+                        self.pushbit(dev, 0)
+
+                self.lib.clr_decoder(devptr)
+                self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
+
     def test_base_packet_monte_carlo(self):
         "TODO: randomize steps to test interrupt protection"
         dev, devptr = super().freshdev()
         self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
-        for _ in range(2):
+        for _ in range(100):
             addr = randrange(0, 255)
             instr = randrange(0, 255)
             self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
@@ -576,7 +593,6 @@ class TestDecodePacket(MySuper):
             self.lib.clr_decoder(devptr)
             # dev.state = dcc_state_t.AWAITING_START_BIT  # TODO: C function
             # dev.count = ctypes.c_uint8(0)
-
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
