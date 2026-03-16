@@ -143,23 +143,6 @@ static inline dcc_state_t
 #else
 dcc_state_t
 #endif
-validate_preamble(dcc_decoder_t * device) {
-    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
-    device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
-    for (int8_t i = (-2 + DCC_BUF_LEN); i > (-21 + DCC_BUF_LEN); i -= 2) {
-        if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
-            device->state = AWAITING_START_BIT; /* invalid preamble */
-            break;
-        }
-    }
-    return device->state;
-}
-
-#ifndef PYTHON_TESTING
-static inline dcc_state_t
-#else
-dcc_state_t
-#endif
 decode_packet(dcc_decoder_t * device) {
     uint8_t *dsts[3] = {
         &(device->packet.address),
@@ -245,14 +228,20 @@ reset_decoder(dcc_decoder_t * device) {
 
 dcc_state_t
 step_decoder(dcc_decoder_t * device) {
-    // uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
+    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
 
+    /* TODO: as a nice-to-have: check for next zero bytes in case of error */
     switch (device->state) {
         case AWAITING_START_BIT:
             break;              /* this state is handled in push_timestamp */
         case VALIDATING_PREAMBLE:
-            validate_preamble(device);
-            /* TODO: if error, check for next preamble */
+            device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
+            for (int8_t i = (DCC_BUF_LEN - 2); i > (DCC_BUF_LEN - 21); i -= 2) {
+                if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
+                    device->state = AWAITING_START_BIT; /* invalid preamble */
+                    break;
+                }
+            }
             break;
         case AWAITING_DATA_BYTES:
             /* 3 sections, 9 bits per section, 2 edges per bit */
