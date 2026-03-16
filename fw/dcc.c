@@ -1,7 +1,7 @@
 /**
  * @file dcc.c
  * @author lowdrant
- * @brief Implementations for interface described in dcc.h.
+ * @brief Implements the interface described in dcc.h.
  *
  * Supports `-DPYTHON_TESTING` define flag for unit testing against Python.
  *
@@ -13,7 +13,6 @@
  */
 #include "dcc.h"
 #include <stdlib.h>
-#include <stdint.h>
 
 /******************************************************************************
  * for python ctypes testing
@@ -60,7 +59,7 @@ get_DCC_BUF_LEN() {
 #ifndef PYTHON_TESTING
 static inline int8_t
 #else
-int8_t                          /* to prevent indent from weirdly spaceing explicit size types */
+int8_t                          /* to prevent indent from weirdly spacing explicit size types */
 #endif                          /* #ifndef PYTHON_TESTING */
 /**
  * @brief Identify a DCC bit given the index of a starting edge in a buffer.
@@ -100,11 +99,7 @@ parse_bit(dcc_decoder_t * device, uint8_t start_idx) {
     return -1;
 }
 
-#ifndef PYTHON_TESTING
 static inline int8_t
-#else
-int8_t
-#endif
 parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
     uint8_t ctr = 7;
     int8_t bit = 0;
@@ -121,11 +116,7 @@ parse_byte(dcc_decoder_t * device, uint8_t * dst, uint8_t base_idx) {
     return 0;
 }
 
-#ifndef PYTHON_TESTING
 static inline dcc_state_t
-#else
-dcc_state_t
-#endif
 decode_packet(dcc_decoder_t * device) {
     uint8_t *dsts[3] = {
         &(device->packet.address),
@@ -187,14 +178,10 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
 dcc_state_t
 init_decoder(dcc_decoder_t * device) {
     reset_decoder(device);
-
     device->w_idx = 0;
     device->r_idx = 0;
-    // device->packet.address = 0;
-    // device->packet.instruction = 0;
-    // device->packet.error_detection = 0;
     for (uint8_t i = 0; i < DCC_BUF_LEN; i++) {
-        device->buf[i] = 0;
+        device->buf[i] = 0; /* TODO: does this even matter? */
     }
     return device->state;
 }
@@ -204,23 +191,21 @@ reset_decoder(dcc_decoder_t * device) {
     device->state = AWAITING_START_BIT;
     device->count = 0;
     device->packet.address = 0;
-    // device->packet.instruction = 0; /* TODO: why does this one not need a reset? */
+    device->packet.instruction = 0;
     device->packet.error_detection = 0;
     return device->state;
 }
 
 dcc_state_t
 step_decoder(dcc_decoder_t * device) {
-    uint8_t base_idx = device->r_idx;   /* in case interrupt alters r_idx */
-
     /* TODO: as a nice-to-have: check for next zero bytes in case of error */
     switch (device->state) {
         case AWAITING_START_BIT:
             break;              /* this state is handled in push_timestamp */
         case VALIDATING_PREAMBLE:
-            device->state = AWAITING_DATA_BYTES;        /* preemptive assignment */
+            device->state = AWAITING_DATA_BYTES;
             for (int8_t i = (DCC_BUF_LEN - 2); i > (DCC_BUF_LEN - 21); i -= 2) {
-                if (1 != parse_bit(device, (base_idx + i) % DCC_BUF_LEN)) {
+                if (1 != parse_bit(device, (device->r_idx + i) % DCC_BUF_LEN)) {
                     device->state = AWAITING_START_BIT; /* invalid preamble */
                     break;
                 }
@@ -236,7 +221,6 @@ step_decoder(dcc_decoder_t * device) {
             break;
         case DECODING_PACKET:
             decode_packet(device);
-/* TODO: if error, check for next premable */
             break;
         case PACKET_RECEIVED:
         case ERROR:

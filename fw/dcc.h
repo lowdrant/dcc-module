@@ -1,22 +1,25 @@
-/** dcc.h
-  *
-  * Stores configuration for recieving Digital Command Control (DCC) signals
-  *
-  * https://www.nmra.org/sites/default/files/standards/sandrp/DCC/S/s-9.1_electrical_standards_for_digital_command_control.pdf
-  *
-  * processing happens in 2 steps: validating preamble, then decoding packet.
-  * this should, on average, reduce the number of instructions executed when
-  * decoding a packet. this is captured in a state machine. the process should go
-  * - wait for startbit
-  * - once start bit, validate preamble
-  * - if preamble, wait for data
-  * - if data valid, ready, else error
-  * invalid preambles just reset preamble detection
-  * @todo make incrementing/checking the state a single function
-  */
+/**
+ * @file dcc.h
+ * @author lowdrant
+ * @brief C library for decoding Digital Command Control (DCC) signals.
+ *
+ * DCC is a niche asynchronous serial communication protocol where each bit is
+ * encoded as two pulse widths. Since there are no standard peripherals to
+ * decode DCC, this library implements both pulse width buffer handling and
+ * packet decoding/validation.
+ *
+ * @note Electrical standard: https://www.nmra.org/sites/default/files/standards/sandrp/DCC/S/s-9.1_electrical_standards_for_digital_command_control.pdf
+ * @note Packet standard: https://www.nmra.org/sites/default/files/standards/sandrp/DCC/S/s-92-2004-07.pdf
+ *
+ * @version 0.1
+ * @date 2026-03-07
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
 #ifndef _DCC_H
 #define _DCC_H
-
 #include <stdint.h>
 
 #define TR1_MIN ((uint32_t) 52) /*!< Minimum '1' halfbit width in us. */
@@ -25,7 +28,6 @@
 #define TR0_MIN ((uint32_t) 90) /*!< Minimum '0' halfbit width in us. */
 #define TR0_MAX ((uint32_t) 10000)      /*!< Maximum '0' halfbit width in us. */
 #define DCC_BUF_LEN ((uint8_t) 64)      /*!< Smallest power of two that holds a packet */
-#define DCC_EDGES_PER_PKT ((uint8_t) 27 * 2 - 1)        /*!< Edges in a packet. */
 
 /**
  * @brief Valid DCC decoder states. 
@@ -51,8 +53,6 @@ typedef struct {
 /**
  * @brief DCC decoder data type.
  *
- * @todo describe state machine progression
- *
  * @see dcc_state_t
  * @see dcc_packet_t
  * @see init_decoder
@@ -61,23 +61,25 @@ typedef struct {
  */
 typedef struct {
     dcc_packet_t packet;        /*!< Decoded packet if state == PACKET_RECEIVED. */
-    dcc_state_t state;          /*!< Decoder current state. */
+    dcc_state_t state;          /*!< Current decoder state. */
     uint32_t buf[DCC_BUF_LEN];  /*!< Circular buffer storing signal edge crossing times. */
     uint8_t w_idx;              /*!< Next index to be written in buffer. */
-    uint8_t r_idx;              /*!< Index to read from buffer. Only valid when TODO */
-    uint8_t count;              /*!< Number of packet timestamps in buffer */
+    uint8_t r_idx;              /*!< The ending (third) edge of the packet start bit. */
+    uint8_t count;              /*!< Number of packet timestamps in buffer. */
 } dcc_decoder_t;
 
 /**
- * @brief Push edge crossing time onto decoder buffer. Written to be called
+ * @brief Push edge crossing time onto decoder buffer and handle any tasks that
+ *        should be performed with each edge crossing. Intended to be called
  *        inside an IRQ.
  *
- * This is the hardware -> state machine interface for the decoder. Its core
- * job is to push timestamps onto the circular buffer. Data will be overwritten
- * in the event of an "overflow." If the decoder state is `AWAITING_START_BIT`,
- * and a start bit is detected, this function will update the state to
- * `VALIDATING_PREAMBLE` and synchronize `device->r_idx` to the starting edge
- * of the start bit.
+ * This function pus the circular buffer, checks for the packet start
+ * bit, and counts the number of post-start-bit edge crossings. The packet start
+ * bit serves to time-align the packet decoding process. Since we may not be
+ * time-aligned, checking for the start bit every edge reduces processing
+ * time spikes. Further, since the buffer is circular, the number of edges
+ * must be explicitly counted to know the number of bits that have arrived
+ * post-start-bit.
  * 
  * @param device dcc_decoder_t * on the RX line.
  * @param timestamp timestamp of edge crossing.
@@ -96,7 +98,20 @@ dcc_state_t init_decoder(dcc_decoder_t * device);
 /* TODO */
 dcc_state_t reset_decoder(dcc_decoder_t * device);
 
-/* TODO */
+/**
+ * @brief Advance decoder state machine if allowed and perform relevant
+ *        processing. This function should be called several times a
+ *        millisecond.
+ * 
+ * This function implements the decoder state machine once a packet start bit
+ * has been detected -- start bit detection occurs in push_timestamp, which is
+ * intended to be put inside an interrupt. This function is intended to run in
+ * the mainloop. It handles all processing to advance the decoding state
+ * machine and decode the current packet.
+ *
+ * @param device dcc_decoder_t * device to 
+ * @return dcc_state_t device 
+ */
 dcc_state_t step_decoder(dcc_decoder_t * device);
 
 #endif                          /* #ifndef _DCC_H */
