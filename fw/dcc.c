@@ -177,17 +177,17 @@ push_timestamp(dcc_decoder_t * device, uint32_t timestamp) {
 
 dcc_state_t
 init_decoder(dcc_decoder_t * device) {
-    reset_decoder(device);
+    clr_decoder(device);
     device->w_idx = 0;
     device->r_idx = 0;
     for (uint8_t i = 0; i < DCC_BUF_LEN; i++) {
-        device->buf[i] = 0; /* TODO: does this even matter? */
+        device->buf[i] = 0;     /* TODO: does this even matter? */
     }
     return device->state;
 }
 
 dcc_state_t
-reset_decoder(dcc_decoder_t * device) {
+clr_decoder(dcc_decoder_t * device) {
     device->state = AWAITING_START_BIT;
     device->count = 0;
     device->packet.address = 0;
@@ -223,6 +223,7 @@ step_decoder(dcc_decoder_t * device) {
             decode_packet(device);
             break;
         case PACKET_RECEIVED:
+            /* TODO: allow push_timestamp to start loading another packet? */
         case ERROR:
             break;              /* TODO: what should these states do? */
     }

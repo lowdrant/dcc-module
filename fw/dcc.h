@@ -4,9 +4,17 @@
  * @brief C library for decoding Digital Command Control (DCC) signals.
  *
  * DCC is a niche asynchronous serial communication protocol where each bit is
- * encoded as two pulse widths. Since there are no standard peripherals to
- * decode DCC, this library implements both pulse width buffer handling and
- * packet decoding/validation.
+ * encoded as two pulse widths. This library implements a state machine 
+ * to handle packet detection, time-alignment, decoding, and error handling.
+ * The state machine follows the progression
+ *
+ *  AWAITING_START_BIT -> VALIDATING_PREAMBLE -> AWAITING_DATA_BYTES -> DECODING_PACKET -> PACKET_RECEIVED
+ * |                    |                                                                                  |
+ *  --`push_timestamp`-- --------------------------------- `step_decoder` ---------------------------------
+ *
+ * where errors currently return the state to `AWAITING_START_BIT`. To reset
+ * the state machine after a decoded packet has been handled, call
+ * `clr_decoder`.
  *
  * @note Electrical standard: https://www.nmra.org/sites/default/files/standards/sandrp/DCC/S/s-9.1_electrical_standards_for_digital_command_control.pdf
  * @note Packet standard: https://www.nmra.org/sites/default/files/standards/sandrp/DCC/S/s-92-2004-07.pdf
@@ -95,19 +103,27 @@ dcc_state_t push_timestamp(dcc_decoder_t * device, uint32_t timestamp);
  */
 dcc_state_t init_decoder(dcc_decoder_t * device);
 
-/* TODO */
-dcc_state_t reset_decoder(dcc_decoder_t * device);
+/**
+ * @brief Clear the decoder after decoding a packet to get ready for the next
+ *        packet.
+ * 
+ * @param device dcc_decoder_t * device to clear.
+ * @return dcc_state_t should be `AWAITING_START_BIT`.
+ */
+dcc_state_t clr_decoder(dcc_decoder_t * device);
 
 /**
- * @brief Advance decoder state machine if allowed and perform relevant
- *        processing. This function should be called several times a
- *        millisecond.
+ * @brief Provides a singular interface for advancing packet decoding state
+ *        machine. This function should be called several times a millisecond.
  * 
- * This function implements the decoder state machine once a packet start bit
+ * This function implements the decoder state machine after a packet start bit
  * has been detected -- start bit detection occurs in push_timestamp, which is
  * intended to be put inside an interrupt. This function is intended to run in
  * the mainloop. It handles all processing to advance the decoding state
  * machine and decode the current packet.
+ *
+ * Once a decoded packet has been handled, call `clr_decoder` to make the
+ * decoder ready for the  next packet.
  *
  * @param device dcc_decoder_t * device to 
  * @return dcc_state_t device 

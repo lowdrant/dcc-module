@@ -573,7 +573,7 @@ class TestDecodePacket(MySuper):
             self.assertEqual(dev.packet.instruction, instr)
             self.assertEqual(dev.packet.error_detection, addr ^ instr)
 
-            self.lib.reset_decoder(devptr)
+            self.lib.clr_decoder(devptr)
             # dev.state = dcc_state_t.AWAITING_START_BIT  # TODO: C function
             # dev.count = ctypes.c_uint8(0)
 
