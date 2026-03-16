@@ -58,23 +58,6 @@ get_DCC_BUF_LEN() {
  ******************************************************************************/
 
 #ifndef PYTHON_TESTING
-static inline uint8_t
-#else
-uint8_t
-#endif                          /* #ifndef PYTHON_TESTING */
-/**
- * @brief Increment an index forwards or backwards along a DCC buffer.
- * 
- * @param i uint8_t the buffer index to be incremented.
- * @param d int8_t the amount to increment i.
- * @return uint8_t i incremented by d.
- */
-increment_index(uint8_t i, int8_t d) {
-    d %= DCC_BUF_LEN;           /* put d within 1 wrap of buf */
-    return (i + (d + DCC_BUF_LEN)) % DCC_BUF_LEN;
-}
-
-#ifndef PYTHON_TESTING
 static inline int8_t
 #else
 int8_t                          /* to prevent indent from weirdly spaceing explicit size types */
@@ -253,7 +236,7 @@ step_decoder(dcc_decoder_t * device) {
             break;
         case DECODING_PACKET:
             decode_packet(device);
-            /* TODO: if error, check for next premable */
+/* TODO: if error, check for next premable */
             break;
         case PACKET_RECEIVED:
         case ERROR:

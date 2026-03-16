@@ -377,7 +377,7 @@ class TestPreamble(MySuper):
         self.assertEqual(1, self.lib.parse_bit(devptr, i))
 
         # check state machine advanced properly
-        self.assertEqual(self.lib.validate_preamble(devptr), dev.state)
+        self.assertEqual(self.lib.step_decoder(devptr), dev.state)
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
 
     def test_too_short_preamble(self):
@@ -385,7 +385,7 @@ class TestPreamble(MySuper):
         for _ in range(9):  # min. 10 '1' bits in preamble
             self.pushbit(dev, 1)
         self.pushbit(dev, 0)
-        self.assertEqual(self.lib.validate_preamble(devptr), dev.state)
+        self.assertEqual(self.lib.step_decoder(devptr), dev.state)
         self.assertEqual(dev.state, dcc_state_t.AWAITING_START_BIT)
 
     def _buffer_wrap_workhorse(self, minus_amount):
@@ -439,7 +439,7 @@ class TestPreamble(MySuper):
                 self.assertState(dev, dcc_state_t.VALIDATING_PREAMBLE)
 
                 # validate preamble
-                state = self.lib.validate_preamble(devptr)
+                state = self.lib.step_decoder(devptr)
                 if n1bits < 10 or any([v > (n1bits - 11) for v in corrupt_idxs]):
                     self.assertEqual(dev.state, dcc_state_t.AWAITING_START_BIT)
                 else:
@@ -457,7 +457,7 @@ class TestDecodePacket(MySuper):
         "Now also pushes preamble onto device"
         dev, devptr = super().freshdev()
         self.push_preamble(dev)
-        self.lib.validate_preamble(devptr)
+        self.lib.step_decoder(devptr)
         self.assertState(dev, dcc_state_t.AWAITING_DATA_BYTES)
         return dev, devptr
 
