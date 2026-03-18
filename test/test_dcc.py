@@ -353,7 +353,7 @@ class TestPushBit(MySuper):
                 self.assertEqual(-1, self.lib.parse_bit(devptr, idx), msg=buf)
                 self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
 
-    def test_monte_carlo(self):
+    def test_pushbit_monte_carlo(self):
         "test decoding of many randomly-generated, possibly-corrupted bits"
         dev, devptr = self.freshdev()
         for i in range(1000):
@@ -448,7 +448,7 @@ class TestPreamble(MySuper):
     def test_buffer_wrap_multiple(self):
         return self._buffer_wrap_workhorse(int(3.25 * self.DCC_BUF_LEN))
 
-    def test_monte_carlo(self):
+    def test_preamble_monte_carlo(self):
         "TODO: update error probabilities for 50% chance of preamble corruption"
         dev, devptr = self.freshdev()
         for _ in range(1000):
