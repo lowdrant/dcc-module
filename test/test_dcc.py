@@ -219,6 +219,19 @@ class MySuper(TestCase):
             self.pushbit(dev, (errdet >> i) & 1)
         self.pushbit(dev, 1)
 
+    def detect_and_handle_timestamp_wrap(self, dev):
+        """
+            Detects if the 32-bit timestamp is close to wrapping and pushes
+            bits on the bus until overflow. 
+
+            Returns True if wrapping was necessary, False otherwise.
+        """
+        devptr = ctypes.pointer(dev)
+        if any(dev.buffer[i] > (2**32 - 1e6) for i in range(self.DCC_BUF_LEN)):
+            self.lib.push_timestamp(devptr, 0)
+            return True
+        return False
+
 
 class TestParseBit(MySuper):
     "Explicitly test timing correctness of C-code parsebit"
@@ -556,10 +569,7 @@ class TestDecodePacket(MySuper):
                 self.assertEqual(dev.packet.instruction, instr)
                 self.assertEqual(dev.packet.error_detection, addr ^ instr)
 
-                # prevent decoding through timestamp overflow
-                if any(dev.buffer[i] > (2**32 - 1e6) for i in range(self.DCC_BUF_LEN)):
-                    while all(dev.buffer[i] > 2e5 for i in range(self.DCC_BUF_LEN)):
-                        self.pushbit(dev, 0)
+                self.detect_and_handle_timestamp_wrap(dev)
 
                 self.lib.clr_decoder(devptr)
                 self.assertState(dev, dcc_state_t.AWAITING_START_BIT)
